@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cloud Security Image Processor</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="page">
+
+  <div class="header">
+    <div class="header-badge">cloud image integrity processor and resizer</div>
+    <h1>Image Resizer</h1>
+    <p>Upload, resize, and download — scanned for security</p>
+  </div>
+
+  <div class="card">
+
+    <!-- Upload -->
+    <div class="card-section">
+      <p class="section-title">Source image</p>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="file" accept="image/*" onchange="handleFile(this)">
+        <svg class="drop-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 16.5V19a1 1 0 001 1h14a1 1 0 001-1v-2.5M12 4v11m0-11L8.5 7.5M12 4l3.5 3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p class="drop-title" id="dropTitle">Drop image here or click to browse</p>
+        <p class="drop-sub" id="dropSub">PNG · JPG · WEBP · GIF</p>
+        <div class="preview-wrap" id="previewWrap">
+          <img class="preview-img" id="previewImg" src="" alt="preview">
+          <span class="preview-meta" id="previewMeta"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dimensions -->
+    <div class="card-section">
+      <p class="section-title">Output dimensions</p>
+      <div class="dim-grid">
+        <div class="field">
+          <label for="width">Width — px</label>
+          <input type="number" id="width" value="300" min="1" max="8000" oninput="syncAspect('w')">
+        </div>
+        <div class="lock-col">
+          <div class="lock-line"></div>
+          <button class="lock-btn" id="lockBtn" onclick="toggleLock()" title="Lock aspect ratio">
+            <svg class="lock-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path id="lockArc" d="M7 11V7a5 5 0 0110 0v4"/>
+            </svg>
+          </button>
+          <div class="lock-line"></div>
+        </div>
+        <div class="field">
+          <label for="height">Height — px</label>
+          <input type="number" id="height" value="300" min="1" max="8000" oninput="syncAspect('h')">
+        </div>
+      </div>
+    </div>
+
+    <!-- Action -->
+    <div class="card-section">
+      <button class="submit-btn" id="submitBtn" onclick="upload()">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12V19a2 2 0 01-2 2H5a2 2 0 01-2-2V12M12 3v12m0-12L8 7m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="submitLabel">Upload &amp; Process</span>
+        <div class="btn-spinner" id="btnSpinner"></div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="status-bar" id="statusBar">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText"></span>
+  </div>
+
+  <!-- Result -->
+  <div class="result-card" id="resultCard">
+    <div class="result-img-wrap">
+      <img class="result-img" id="output" src="" alt="Processed output">
+    </div>
+    <div class="result-footer">
+      <div class="result-stats">
+        <div class="stat">
+          <div class="stat-label">Width</div>
+          <div class="stat-val" id="metaW">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Height</div>
+          <div class="stat-val" id="metaH">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Security</div>
+          <div class="stat-val" id="metaSec" style="color:var(--success)">—</div>
+        </div>
+      </div>
+      <button class="dl-btn" onclick="downloadImage()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 3v12m0 0l-4-4m4 4l4-4M3 19h18" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let downloadUrl = "";
+let aspectLocked = false;
+let aspectRatio = 1;
+
+function handleFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    aspectRatio = img.width / img.height;
+    document.getElementById('width').value = img.width;
+    document.getElementById('height').value = img.height;
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+  document.getElementById('previewImg').src = URL.createObjectURL(file);
+  document.getElementById('previewMeta').textContent = file.name + ' · ' + Math.round(file.size / 1024) + ' KB';
+  document.getElementById('previewWrap').style.display = 'flex';
+  document.getElementById('dropTitle').style.display = 'none';
+  document.getElementById('dropSub').style.display = 'none';
+}
+
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) {
+    document.getElementById('file').files = e.dataTransfer.files;
+    handleFile(document.getElementById('file'));
+  }
+});
+
+function toggleLock() {
+  aspectLocked = !aspectLocked;
+  if (aspectLocked) {
+    const w = parseFloat(document.getElementById('width').value) || 1;
+    const h = parseFloat(document.getElementById('height').value) || 1;
+    aspectRatio = w / h;
+  }
+  document.getElementById('lockBtn').classList.toggle('locked', aspectLocked);
+  document.getElementById('lockArc').style.opacity = aspectLocked ? '0' : '1';
+}
+
+function syncAspect(changed) {
+  if (!aspectLocked) return;
+  if (changed === 'w') {
+    const w = parseFloat(document.getElementById('width').value);
+    if (w > 0) document.getElementById('height').value = Math.round(w / aspectRatio);
+  } else {
+    const h = parseFloat(document.getElementById('height').value);
+    if (h > 0) document.getElementById('width').value = Math.round(h * aspectRatio);
+  }
+}
+
+function setStatus(type, msg) {
+  const bar = document.getElementById('statusBar');
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  bar.className = 'status-bar ' + type;
+  dot.className = 'status-dot' + (type === 'loading' ? ' spin' : '');
+  txt.textContent = msg;
+}
+
+function setLoading(on) {
+  document.getElementById('submitBtn').disabled = on;
+  document.getElementById('submitLabel').textContent = on ? 'Processing…' : 'Upload & Process';
+  document.getElementById('btnSpinner').style.display = on ? 'block' : 'none';
+}
+
+function downloadImage() {
+  if (!downloadUrl) { alert("No image available"); return; }
+  const finalUrl = "/download?url=" + encodeURIComponent(downloadUrl);
+  window.location.href = finalUrl;
+}
+
+async function upload() {
+  const file = document.getElementById("file").files[0];
+  if (!file) { alert("Select a file first"); return; }
+  const width = document.getElementById("width").value;
+  const height = document.getElementById("height").value;
+  const formData = new FormData();
+  formData.append("image", file);
+  formData.append("width", width);
+  formData.append("height", height);
+
+  setLoading(true);
+  setStatus('loading', 'Uploading and scanning…');
+  document.getElementById('resultCard').style.display = 'none';
+
+  const res = await fetch("/upload", { method: "POST", body: formData });
+  const data = await res.json();
+
+  if (data.status === "Safe") {
+    setStatus('safe', 'Security scan passed — image is clean');
+    document.getElementById("output").src = data.url;
+    downloadUrl = data.url;
+    document.getElementById('metaW').textContent = width + 'px';
+    document.getElementById('metaH').textContent = height + 'px';
+    document.getElementById('metaSec').textContent = 'Clean';
+    document.getElementById('resultCard').style.display = 'block';
+  } else {
+    setStatus('unsafe', 'Security check failed: ' + (data.status || 'image blocked'));
+  }
+
+  setLoading(false);
+}
+</script>
+</body>
+</html>
