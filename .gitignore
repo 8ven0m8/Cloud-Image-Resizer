@@ -3,6 +3,3 @@
 
 # Environment variables
 .env
-
-# Text files
-*.txt
